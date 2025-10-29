@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
-    
+
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 
     <style>
@@ -17,7 +17,7 @@
             background-color: #f9f7f2; /* 主色：米白 */
             color: #3b3b3b; /* 深灰文字 */
             font-family: 'Plus Jakarta Sans', 'Noto Sans TC', '微軟正黑體', sans-serif;
-            letter-spacing: 0.2px; 
+            letter-spacing: 0.2px;
             padding: 30px;
             margin: 0;
         }
@@ -128,24 +128,23 @@
         .profit { color: #4da46d; } /* 草綠 */
         .loss { color: #7a4b29; } /* 柔棕 */
 
-
         /* --- 儀表板的佈局 (CSS 延續) --- */
         .dashboard-layout {
             display: grid;
             gap: 25px;
             grid-template-columns: 2fr 1fr;
-            grid-template-areas: "stats stats" "chart distribution"; 
+            grid-template-areas: "stats stats" "chart distribution";
         }
         @media (max-width: 992px) {
             .dashboard-layout {
                 grid-template-columns: 1fr;
-                grid-template-areas: "stats" "distribution" "chart"; 
+                grid-template-areas: "stats" "distribution" "chart";
             }
         }
-        .stats-row { 
-            grid-area: stats; 
+        .stats-row {
+            grid-area: stats;
             display: grid;
-            grid-template-columns: 2fr 1fr; 
+            grid-template-columns: 2fr 1fr;
             gap: 20px;
         }
         @media (max-width: 768px) {
@@ -161,6 +160,85 @@
         .trend-icon { font-size: 1rem; margin-right: 8px; }
         .btn-update { background-color: #e4b85b; color: white; border: none; border-radius: 10px; padding: 10px 15px; font-weight: 600; cursor: pointer; transition: background-color 0.2s ease; box-shadow: 0 2px 8px rgba(228, 184, 91, 0.3); font-size: 0.9rem; margin-left: 15px; }
         .btn-update:hover { background-color: #d1a852; }
+
+        /* --- Modal 相關樣式 --- */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.3);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-overlay.show {
+            display: flex;
+        }
+        .modal {
+            background: #ffffff;
+            border-radius: 20px;
+            padding: 25px;
+            width: min(500px, 90vw);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
+            position: relative;
+        }
+        .modal h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-weight: 700;
+            color: #3b3b3b;
+        }
+        .modal form {
+            display: grid;
+            gap: 12px;
+        }
+        .modal label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #5c728a;
+        }
+        .modal input,
+        .modal select,
+        .modal textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(92, 114, 138, 0.25);
+            font-size: 1rem;
+            font-family: 'Plus Jakarta Sans', 'Noto Sans TC', '微軟正黑體', sans-serif;
+            background: #fcfcfc;
+        }
+        .modal textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .btn-secondary {
+            background: transparent;
+            border: 1px solid rgba(92, 114, 138, 0.4);
+            color: #5c728a;
+            border-radius: 10px;
+            padding: 10px 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn-secondary:hover {
+            background: rgba(92, 114, 138, 0.08);
+        }
+        .action-link {
+            color: #5c728a;
+            font-size: 0.85rem;
+            cursor: pointer;
+            margin-right: 8px;
+        }
+        .action-link:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -171,22 +249,24 @@
             <button class="tab-button" onclick="showTab('holdings')">持倉管理</button>
             <button class="tab-button" onclick="showTab('cashflow')">現金流紀錄</button>
         </div>
-        
+
         <div id="dashboard" class="tab-content">
             <h1 class="title">資產總覽</h1>
-            
+
             <div class="dashboard-layout">
                 <div class="stats-row">
                     <div class="card asset-total-card">
                         <div class="subtitle">目前總資產 (Total Net Worth)</div>
-                        <div class="total-value">$1,234,567.89</div>
-                        
+                        <div class="total-value" id="total-asset-value">$0.00</div>
+
                         <p style="font-size: 0.9rem; color: #5c728a;">
-                            上次更新：<span id="last-updated-time">2025/10/29 15:30:00</span>
-                            <button class="btn-update">手動更新報價</button>
+                            上次更新：<span id="last-updated-time">—</span>
+                            <button class="btn-update" id="update-prices-btn">手動更新報價</button>
+                            <button class="btn-update" id="backfill-snapshots-btn" style="background-color: #7a4b29; margin-left: 10px;">重建歷史快照 (API)</button>
+                            <span id="backfill-status" style="font-size: 0.8rem; color: #5c728a; margin-left: 10px;"></span>
                         </p>
                     </div>
-                    
+
                     <div class="card stat-small-card">
                         <div>
                             <div class="subtitle">年度報酬率 (YTD Return)</div>
@@ -202,28 +282,25 @@
 
                 <div class="card chart-area">
                     <h2 class="subtitle">資產總值變化趨勢圖</h2>
-                    <div id="asset-chart" style="height: 350px;">
-                        </div>
+                    <div id="asset-chart" style="height: 350px;"></div>
                 </div>
 
                 <div class="card distribution-area">
                     <h2 class="subtitle">資產分佈圓餅圖</h2>
-                    <div id="distribution-chart" style="height: 350px;">
-                        [圓餅圖佔位]
-                    </div>
+                    <div id="distribution-chart" style="height: 350px;"></div>
                 </div>
             </div>
         </div>
 
         <div id="holdings" class="tab-content" style="display: none;">
             <h1 class="title">持倉管理</h1>
-            
+
             <div class="card">
                 <div class="list-header">
                     <h2 class="subtitle" style="margin-bottom: 0;">投資清單 (Holdings List)</h2>
-                    <button class="btn-primary">＋ 新增持倉</button>
+                    <button class="btn-primary" id="add-holding-btn">＋ 新增持倉</button>
                 </div>
-                
+
                 <table class="data-table">
                     <thead>
                         <tr>
@@ -236,38 +313,20 @@
                             <th>操作</th>
                         </tr>
                     </thead>
-                    <tbody id="holdings-table-body">
-                        <tr>
-                            <td>台積電 <br><span style="font-size:0.85rem; color:#5c728a;">2330.TW</span></td>
-                            <td>股票</td>
-                            <td>1,000</td>
-                            <td>$600.50</td>
-                            <td>$625.00</td>
-                            <td class="profit">+$24,500 (+4.08%)</td>
-                            <td><span style="font-size:0.8rem; color:#5c728a;">編輯 | 刪除</span></td>
-                        </tr>
-                         <tr>
-                            <td>Bitcoin <br><span style="font-size:0.85rem; color:#5c728a;">BTC</span></td>
-                            <td>加密貨幣</td>
-                            <td>0.5</td>
-                            <td>$45,000.00</td>
-                            <td>$43,500.00</td>
-                            <td class="loss">−$750 (−3.33%)</td>
-                            <td><span style="font-size:0.8rem; color:#5c728a;">編輯 | 刪除</span></td>
-                        </tr>
-                    </tbody>
+                    <tbody id="holdings-table-body"></tbody>
                 </table>
-                
+
                 <p style="font-size: 0.9rem; color: #5c728a; margin-top: 20px;">
                     * 點擊表格行可編輯資料
                 </p>
             </div>
-            
+
             <div class="card">
                 <h2 class="subtitle">CSV 匯入/匯出</h2>
                 <p>將持倉資料匯出為 JSON 備份或 CSV 檔案，以便管理和備份。</p>
-                <button class="btn-update" style="background-color: #5c728a;">匯出 JSON 備份</button>
-                <button class="btn-update" style="background-color: #5c728a;">從 JSON 匯入</button>
+                <button class="btn-update" id="export-json-btn" style="background-color: #5c728a;">匯出 JSON 備份</button>
+                <button class="btn-update" id="import-json-btn" style="background-color: #5c728a;">從 JSON 匯入</button>
+                <input type="file" id="import-json-input" accept="application/json" style="display:none;" />
             </div>
         </div>
 
@@ -277,7 +336,7 @@
             <div class="card">
                 <div class="list-header">
                     <h2 class="subtitle" style="margin-bottom: 0;">交易記錄 (Transaction History)</h2>
-                    <button class="btn-primary">＋ 新增交易</button>
+                    <button class="btn-primary" id="add-cashflow-btn">＋ 新增交易</button>
                 </div>
 
                 <table class="data-table">
@@ -290,29 +349,7 @@
                             <th>操作</th>
                         </tr>
                     </thead>
-                    <tbody id="cashflow-table-body">
-                        <tr>
-                            <td>2025/10/01</td>
-                            <td><span class="profit">存入資金 (Deposit)</span></td>
-                            <td>+$100,000.00</td>
-                            <td>初始投資金額</td>
-                            <td><span style="font-size:0.8rem; color:#5c728a;">編輯 | 刪除</span></td>
-                        </tr>
-                        <tr>
-                            <td>2025/10/15</td>
-                            <td><span class="profit">股息收入 (Dividend)</span></td>
-                            <td>+$1,200.00</td>
-                            <td>2330.TW 股息</td>
-                            <td><span style="font-size:0.8rem; color:#5c728a;">編輯 | 刪除</span></td>
-                        </tr>
-                        <tr>
-                            <td>2025/10/20</td>
-                            <td><span class="loss">手續費 (Fee)</span></td>
-                            <td>−$50.00</td>
-                            <td>美股交易手續費</td>
-                            <td><span style="font-size:0.8rem; color:#5c728a;">編輯 | 刪除</span></td>
-                        </tr>
-                    </tbody>
+                    <tbody id="cashflow-table-body"></tbody>
                 </table>
             </div>
 
@@ -325,7 +362,1048 @@
 
     </div>
 
+    <!-- 持倉資料 Modal -->
+    <div class="modal-overlay" id="holdings-modal">
+        <div class="modal">
+            <h3 id="holdings-modal-title">新增持倉</h3>
+            <form id="holdings-form">
+                <input type="hidden" id="holding-id" />
+                <label>
+                    類別
+                    <select id="holding-type" required>
+                        <option value="stock">股票</option>
+                        <option value="cash">現金</option>
+                        <option value="crypto">加密貨幣</option>
+                        <option value="fund">基金/ETF</option>
+                    </select>
+                </label>
+                <label>
+                    名稱 / 代碼
+                    <input type="text" id="holding-ticker" placeholder="例如：2330.TW" required />
+                </label>
+                <label>
+                    數量
+                    <input type="number" id="holding-quantity" min="0" step="0.0001" required />
+                </label>
+                <label>
+                    平均成本
+                    <input type="number" id="holding-avg-cost" min="0" step="0.0001" required />
+                </label>
+                <label>
+                    目前價格（可選，若留白將於更新報價時填入）
+                    <input type="number" id="holding-latest-price" min="0" step="0.0001" />
+                </label>
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" data-close-modal>取消</button>
+                    <button type="submit" class="btn-primary">儲存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 現金流 Modal -->
+    <div class="modal-overlay" id="cashflow-modal">
+        <div class="modal">
+            <h3 id="cashflow-modal-title">新增現金流紀錄</h3>
+            <form id="cashflow-form">
+                <input type="hidden" id="cashflow-id" />
+                <label>
+                    日期
+                    <input type="date" id="cashflow-date" required />
+                </label>
+                <label>
+                    交易類型
+                    <select id="cashflow-type" required>
+                        <option value="Deposit">存入資金 (Deposit)</option>
+                        <option value="Withdrawal">提取資金 (Withdrawal)</option>
+                        <option value="Dividend">股息收入 (Dividend)</option>
+                        <option value="Fee">手續費 (Fee)</option>
+                    </select>
+                </label>
+                <label>
+                    金額
+                    <input type="number" id="cashflow-amount" step="0.01" required />
+                </label>
+                <label>
+                    備註
+                    <textarea id="cashflow-notes" placeholder="可輸入備註說明"></textarea>
+                </label>
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" data-close-modal>取消</button>
+                    <button type="submit" class="btn-primary">儲存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
+        // --- 常數與資料初始化 ---
+        var STORAGE_KEY = 'personalAssetManagerDB';
+        var defaultDatabase = {
+            settings: {
+                userName: 'User',
+                currency: 'TWD'
+            },
+            holdings: [
+                {
+                    id: 'hld-1',
+                    type: 'stock',
+                    ticker: '2330.TW',
+                    quantity: 1000,
+                    avgCost: 600.5,
+                    latestPrice: 625.0,
+                    lastUpdated: '2025-10-29T15:30:00+08:00'
+                },
+                {
+                    id: 'hld-2',
+                    type: 'crypto',
+                    ticker: 'BTC',
+                    quantity: 0.5,
+                    avgCost: 45000,
+                    latestPrice: 43500,
+                    lastUpdated: '2025-10-28T11:10:00+08:00'
+                }
+            ],
+            cashFlow: [
+                {
+                    id: 'cf-1',
+                    date: '2025-10-01',
+                    type: 'Deposit',
+                    amount: 100000,
+                    notes: '初始投資金額'
+                },
+                {
+                    id: 'cf-2',
+                    date: '2025-10-15',
+                    type: 'Dividend',
+                    amount: 1200,
+                    notes: '2330.TW 股息'
+                },
+                {
+                    id: 'cf-3',
+                    date: '2025-10-20',
+                    type: 'Fee',
+                    amount: -50,
+                    notes: '美股交易手續費'
+                }
+            ],
+            snapshots: {
+                history: [
+                    { date: '2025-08-01', value: 9438.60 },
+                    { date: '2025-08-04', value: 9629.54 },
+                    { date: '2025-08-08', value: 9765.15 },
+                    { date: '2025-08-12', value: 9889.35 },
+                    { date: '2025-08-19', value: 9568.16 },
+                    { date: '2025-08-26', value: 9717.21 },
+                    { date: '2025-09-03', value: 9627.41 },
+                    { date: '2025-09-09', value: 9901.41 },
+                    { date: '2025-09-15', value: 10204.15 },
+                    { date: '2025-09-23', value: 10525.60 },
+                    { date: '2025-09-30', value: 10542.23 },
+                    { date: '2025-10-03', value: 10731.75 },
+                    { date: '2025-10-10', value: 11259.05 },
+                    { date: '2025-10-17', value: 13826.20 },
+                    { date: '2025-10-24', value: 14181.53 },
+                    { date: '2025-10-29', value: 14628.23 }
+                ]
+            }
+        };
+
+        var AppData = null;
+
+        function deepClone(obj) {
+            return JSON.parse(JSON.stringify(obj));
+        }
+
+        function loadData() {
+            try {
+                var stored = localStorage.getItem(STORAGE_KEY);
+                if (!stored) {
+                    AppData = deepClone(defaultDatabase);
+                    takeSnapshot();
+                    saveData(AppData);
+                    return AppData;
+                }
+
+                var parsed = JSON.parse(stored);
+                AppData = {
+                    settings: Object.assign({}, defaultDatabase.settings, parsed.settings || {}),
+                    holdings: Array.isArray(parsed.holdings) ? parsed.holdings : deepClone(defaultDatabase.holdings),
+                    cashFlow: Array.isArray(parsed.cashFlow) ? parsed.cashFlow : deepClone(defaultDatabase.cashFlow),
+                    snapshots: parsed.snapshots && typeof parsed.snapshots === 'object'
+                        ? parsed.snapshots
+                        : deepClone(defaultDatabase.snapshots)
+                };
+                return AppData;
+            } catch (error) {
+                console.error('讀取資料時發生錯誤，已回復預設資料。', error);
+                AppData = deepClone(defaultDatabase);
+                takeSnapshot();
+                saveData(AppData);
+                return AppData;
+            }
+        }
+
+        function saveData(data) {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            } catch (error) {
+                console.error('儲存資料時發生錯誤：', error);
+            }
+        }
+
+        function generateId(prefix) {
+            return prefix + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        }
+
+        function formatCurrency(value) {
+            var number = Number(value) || 0;
+            var formatter = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            var sign = number >= 0 ? '' : '−';
+            return sign + '$' + formatter.format(Math.abs(number));
+        }
+
+        function formatPercentage(value) {
+            if (!isFinite(value)) { return '—'; }
+            var sign = value >= 0 ? '+' : '−';
+            return sign + Math.abs(value).toFixed(2) + '%';
+        }
+
+        function formatDateDisplay(dateString) {
+            if (!dateString) { return '—'; }
+            var date = new Date(dateString);
+            if (isNaN(date.getTime())) { return dateString; }
+            return date.toLocaleDateString('zh-TW');
+        }
+
+        function calculateNetCash() {
+            if (!Array.isArray(AppData.cashFlow)) { return 0; }
+            return AppData.cashFlow.reduce(function(total, record) {
+                return total + (Number(record.amount) || 0);
+            }, 0);
+        }
+
+        function calculateTotalValue() {
+            var holdingsValue = Array.isArray(AppData.holdings)
+                ? AppData.holdings.reduce(function(total, holding) {
+                    var qty = Number(holding.quantity) || 0;
+                    var price = Number(holding.latestPrice) || 0;
+                    return total + qty * price;
+                }, 0)
+                : 0;
+
+            var netCash = calculateNetCash();
+            return holdingsValue + netCash;
+        }
+
+        function takeSnapshot() {
+            if (!AppData) { return; }
+
+            var currentTotal = calculateTotalValue();
+            var todayDate = new Date().toISOString().slice(0, 10);
+
+            if (!AppData.snapshots || !Array.isArray(AppData.snapshots.history)) {
+                AppData.snapshots = { history: [] };
+            }
+
+            var history = AppData.snapshots.history;
+            var todaySnapshotIndex = history.findIndex(function(item) { return item.date === todayDate; });
+
+            if (todaySnapshotIndex > -1) {
+                history[todaySnapshotIndex].value = currentTotal;
+            } else {
+                history.push({ date: todayDate, value: currentTotal });
+            }
+
+            history.sort(function(a, b) { return new Date(a.date) - new Date(b.date); });
+        }
+
+        function getLastUpdatedTime() {
+            if (!Array.isArray(AppData.holdings) || AppData.holdings.length === 0) {
+                return null;
+            }
+            var timestamps = AppData.holdings
+                .map(function(holding) { return holding.lastUpdated; })
+                .filter(Boolean)
+                .map(function(value) { return new Date(value).getTime(); })
+                .filter(function(time) { return !isNaN(time); });
+            if (timestamps.length === 0) { return null; }
+            return new Date(Math.max.apply(null, timestamps));
+        }
+
+        function updateDashboard() {
+            var totalValue = calculateTotalValue();
+            var totalElement = document.getElementById('total-asset-value');
+            totalElement.textContent = formatCurrency(totalValue);
+
+            var lastUpdatedDate = getLastUpdatedTime();
+            var lastUpdatedElement = document.getElementById('last-updated-time');
+            if (lastUpdatedDate) {
+                lastUpdatedElement.textContent = lastUpdatedDate.toLocaleString('zh-TW');
+            } else {
+                lastUpdatedElement.textContent = '—';
+            }
+        }
+
+        function renderHoldingsTable() {
+            var tbody = document.getElementById('holdings-table-body');
+            tbody.innerHTML = '';
+
+            if (!Array.isArray(AppData.holdings) || AppData.holdings.length === 0) {
+                var emptyRow = document.createElement('tr');
+                var cell = document.createElement('td');
+                cell.colSpan = 7;
+                cell.textContent = '目前尚未有持倉資料，請點選「新增持倉」。';
+                cell.style.color = '#5c728a';
+                emptyRow.appendChild(cell);
+                tbody.appendChild(emptyRow);
+                return;
+            }
+
+            AppData.holdings.forEach(function(holding) {
+                var tr = document.createElement('tr');
+                tr.dataset.id = holding.id;
+
+                var nameCell = document.createElement('td');
+                var label = holding.ticker || '—';
+                nameCell.innerHTML = '<strong>' + label + '</strong><br><span style="font-size:0.85rem; color:#5c728a;">' + (translateHoldingType(holding.type) || '—') + '</span>';
+
+                var typeCell = document.createElement('td');
+                typeCell.textContent = translateHoldingType(holding.type);
+
+                var quantityCell = document.createElement('td');
+                quantityCell.textContent = Number(holding.quantity || 0).toLocaleString();
+
+                var avgCostCell = document.createElement('td');
+                avgCostCell.textContent = formatCurrency(holding.avgCost);
+
+                var latestPriceCell = document.createElement('td');
+                latestPriceCell.textContent = formatCurrency(holding.latestPrice);
+
+                var totalCost = (Number(holding.quantity) || 0) * (Number(holding.avgCost) || 0);
+                var marketValue = (Number(holding.quantity) || 0) * (Number(holding.latestPrice) || 0);
+                var profitValue = marketValue - totalCost;
+                var percent = totalCost === 0 ? 0 : (profitValue / totalCost) * 100;
+
+                var profitCell = document.createElement('td');
+                var className = profitValue >= 0 ? 'profit' : 'loss';
+                profitCell.className = className;
+                var sign = profitValue >= 0 ? '+' : '−';
+                profitCell.textContent = sign + formatCurrency(Math.abs(profitValue)).replace('+$', '$') + ' (' + formatPercentage(percent) + ')';
+
+                var actionCell = document.createElement('td');
+                var editLink = document.createElement('span');
+                editLink.className = 'action-link';
+                editLink.textContent = '編輯';
+                editLink.dataset.action = 'edit';
+
+                var deleteLink = document.createElement('span');
+                deleteLink.className = 'action-link';
+                deleteLink.textContent = '刪除';
+                deleteLink.dataset.action = 'delete';
+
+                actionCell.appendChild(editLink);
+                actionCell.appendChild(deleteLink);
+
+                tr.appendChild(nameCell);
+                tr.appendChild(typeCell);
+                tr.appendChild(quantityCell);
+                tr.appendChild(avgCostCell);
+                tr.appendChild(latestPriceCell);
+                tr.appendChild(profitCell);
+                tr.appendChild(actionCell);
+
+                tbody.appendChild(tr);
+            });
+        }
+
+        function translateHoldingType(type) {
+            switch (type) {
+                case 'stock': return '股票';
+                case 'cash': return '現金';
+                case 'crypto': return '加密貨幣';
+                case 'fund': return '基金/ETF';
+                default: return type || '—';
+            }
+        }
+
+        function renderCashFlowTable() {
+            var tbody = document.getElementById('cashflow-table-body');
+            tbody.innerHTML = '';
+
+            if (!Array.isArray(AppData.cashFlow) || AppData.cashFlow.length === 0) {
+                var emptyRow = document.createElement('tr');
+                var cell = document.createElement('td');
+                cell.colSpan = 5;
+                cell.textContent = '目前尚未有現金流紀錄，請點選「新增交易」。';
+                cell.style.color = '#5c728a';
+                emptyRow.appendChild(cell);
+                tbody.appendChild(emptyRow);
+                return;
+            }
+
+            var sortedCashFlow = AppData.cashFlow.slice().sort(function(a, b) {
+                return new Date(b.date) - new Date(a.date);
+            });
+
+            sortedCashFlow.forEach(function(record) {
+                var tr = document.createElement('tr');
+                tr.dataset.id = record.id;
+
+                var dateCell = document.createElement('td');
+                dateCell.textContent = formatDateDisplay(record.date);
+
+                var typeCell = document.createElement('td');
+                var className = record.amount >= 0 ? 'profit' : 'loss';
+                typeCell.innerHTML = '<span class="' + className + '">' + translateCashflowType(record.type) + '</span>';
+
+                var amountCell = document.createElement('td');
+                amountCell.textContent = formatCurrency(record.amount);
+
+                var notesCell = document.createElement('td');
+                notesCell.textContent = record.notes || '—';
+
+                var actionCell = document.createElement('td');
+                var editLink = document.createElement('span');
+                editLink.className = 'action-link';
+                editLink.textContent = '編輯';
+                editLink.dataset.action = 'edit';
+
+                var deleteLink = document.createElement('span');
+                deleteLink.className = 'action-link';
+                deleteLink.textContent = '刪除';
+                deleteLink.dataset.action = 'delete';
+
+                actionCell.appendChild(editLink);
+                actionCell.appendChild(deleteLink);
+
+                tr.appendChild(dateCell);
+                tr.appendChild(typeCell);
+                tr.appendChild(amountCell);
+                tr.appendChild(notesCell);
+                tr.appendChild(actionCell);
+
+                tbody.appendChild(tr);
+            });
+        }
+
+        function translateCashflowType(type) {
+            switch (type) {
+                case 'Deposit': return '存入資金 (Deposit)';
+                case 'Withdrawal': return '提取資金 (Withdrawal)';
+                case 'Dividend': return '股息收入 (Dividend)';
+                case 'Fee': return '手續費 (Fee)';
+                default: return type || '—';
+            }
+        }
+
+        function getSnapshotSeries() {
+            var history = AppData.snapshots && Array.isArray(AppData.snapshots.history)
+                ? AppData.snapshots.history
+                : [];
+            return history
+                .slice()
+                .filter(function(point) {
+                    return point.date && typeof point.value !== 'undefined';
+                })
+                .sort(function(a, b) {
+                    return new Date(a.date) - new Date(b.date);
+                });
+        }
+
+        var chartDiv = null;
+        var chartState = {
+            dataMap: [],
+            yData: [],
+            lastInteraction: 0
+        };
+
+        function initAssetChart() {
+            chartDiv = document.getElementById('asset-chart');
+            if (!chartDiv) { return; }
+
+            var series = getSnapshotSeries();
+            chartState.dataMap = series.map(function(item) {
+                return {
+                    time: new Date(item.date).getTime(),
+                    value: Number(item.value) || 0
+                };
+            });
+            chartState.yData = chartState.dataMap.map(function(item) { return item.value; });
+
+            var xData = series.map(function(item) { return item.date; });
+            var yData = series.map(function(item) { return Number(item.value) || 0; });
+
+            var trace = {
+                x: xData,
+                y: yData,
+                type: 'scatter',
+                mode: 'lines',
+                name: '資產總值',
+                line: { color: '#5c728a', width: 3 },
+                hoverinfo: 'x+y',
+                hovertemplate: '%{x|%Y-%m-%d}<br><b>%{y:$,.2f}</b><extra></extra>'
+            };
+
+            var baseLayout = {
+                font: { family: 'Plus Jakarta Sans, Noto Sans TC, 微軟正黑體, sans-serif', color: '#3b3b3b' },
+                paper_bgcolor: 'transparent',
+                plot_bgcolor: 'transparent',
+                dragmode: 'select',
+                selectdirection: 'h',
+                xaxis: { type: 'date', title: '日期', gridcolor: '#eeeeee' },
+                yaxis: { title: '資產總值', tickprefix: '$', tickformat: '~s', gridcolor: '#eeeeee' },
+                hovermode: 'x unified',
+                margin: { l: 60, r: 30, t: 30, b: 50 },
+                newselection: { line: { color: 'rgba(0, 0, 0, 0)' } },
+                shapes: [],
+                annotations: []
+            };
+
+            var config = { responsive: true, displayModeBar: false, scrollZoom: false };
+            Plotly.newPlot(chartDiv, [trace], baseLayout, config);
+
+            chartDiv.removeAllListeners('plotly_selecting');
+            chartDiv.removeAllListeners('plotly_deselect');
+
+            var THROTTLE_DELAY = 11;
+            chartState.lastInteraction = 0;
+
+            chartDiv.on('plotly_selecting', function(eventData) {
+                var now = Date.now();
+                if (now - chartState.lastInteraction < THROTTLE_DELAY) { return; }
+                chartState.lastInteraction = now;
+
+                if (!eventData || !eventData.range) {
+                    Plotly.relayout(chartDiv, { shapes: [], annotations: [] });
+                    return;
+                }
+
+                var xRange = eventData.range.x;
+                var startTime = new Date(xRange[0]).getTime();
+                var endTime = new Date(xRange[1]).getTime();
+
+                var selectedPoints = chartState.dataMap.filter(function(point) {
+                    return point.time >= startTime && point.time <= endTime;
+                });
+
+                if (selectedPoints.length < 2) {
+                    Plotly.relayout(chartDiv, { shapes: [], annotations: [] });
+                    return;
+                }
+
+                var startData = selectedPoints[0];
+                var endData = selectedPoints[selectedPoints.length - 1];
+                var valueChange = endData.value - startData.value;
+                var percentChange = startData.value === 0 ? 0 : (valueChange / startData.value) * 100;
+                var isProfit = valueChange >= 0;
+
+                var trendColor = isProfit ? '#4da46d' : '#7a4b29';
+                var trendFillColor = isProfit ? 'rgba(77, 164, 109, 0.1)' : 'rgba(122, 75, 41, 0.1)';
+
+                var yMin = Math.min.apply(null, chartState.yData);
+                var yMax = Math.max.apply(null, chartState.yData);
+                var yAnnotationPos = yMax * 0.95;
+
+                var startLine = { type: 'line', x0: xRange[0], x1: xRange[0], y0: yMin, y1: yMax, line: { color: '#5c728a', width: 1, dash: 'dot' } };
+                var endLine = { type: 'line', x0: xRange[1], x1: xRange[1], y0: yMin, y1: yMax, line: { color: '#5c728a', width: 1, dash: 'dot' } };
+                var fillRect = { type: 'rect', x0: xRange[0], x1: xRange[1], y0: yMin, y1: yMax, fillcolor: trendFillColor, line: { width: 0 } };
+
+                var textLine1 = '<b><span style="color:' + trendColor + '; font-size: 1.1em;">' + formatCurrency(valueChange) + ' (' + formatPercentage(percentChange) + ')</span></b>';
+                var textLine2 = '<span style="color:#5c728a; font-size: 0.9em;">' + formatDateRangeLabel(xRange[0], xRange[1]) + '</span>';
+
+                var newAnnotation = {
+                    x: (startTime + endTime) / 2,
+                    y: yAnnotationPos,
+                    text: textLine1 + '<br>' + textLine2,
+                    showarrow: false,
+                    bgcolor: 'rgba(255, 255, 255, 0.95)',
+                    bordercolor: 'rgba(92, 114, 138, 0.2)',
+                    borderwidth: 1,
+                    borderpad: 8,
+                    font: { family: 'Plus Jakarta Sans, Noto Sans TC, 微軟正黑體, sans-serif' },
+                    align: 'center'
+                };
+
+                Plotly.relayout(chartDiv, {
+                    shapes: [startLine, endLine, fillRect],
+                    annotations: [newAnnotation]
+                });
+            });
+
+            chartDiv.on('plotly_deselect', function() {
+                Plotly.relayout(chartDiv, { shapes: [], annotations: [] });
+            });
+        }
+
+        function formatDateRangeLabel(start, end) {
+            var startDate = new Date(start);
+            var endDate = new Date(end);
+            return startDate.toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' }) + ' - ' + endDate.toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' });
+        }
+
+        function refreshAssetChart() {
+            if (!chartDiv) {
+                initAssetChart();
+                return;
+            }
+            var series = getSnapshotSeries();
+            chartState.dataMap = series.map(function(item) {
+                return { time: new Date(item.date).getTime(), value: Number(item.value) || 0 };
+            });
+            chartState.yData = chartState.dataMap.map(function(item) { return item.value; });
+
+            Plotly.react(chartDiv, [{
+                x: series.map(function(item) { return item.date; }),
+                y: series.map(function(item) { return Number(item.value) || 0; }),
+                type: 'scatter',
+                mode: 'lines',
+                name: '資產總值',
+                line: { color: '#5c728a', width: 3 },
+                hoverinfo: 'x+y',
+                hovertemplate: '%{x|%Y-%m-%d}<br><b>%{y:$,.2f}</b><extra></extra>'
+            }], chartDiv.layout);
+        }
+
+        function renderDistributionChart() {
+            var container = document.getElementById('distribution-chart');
+            if (!container) { return; }
+
+            var grouped = {};
+            if (Array.isArray(AppData.holdings)) {
+                AppData.holdings.forEach(function(holding) {
+                    var key = translateHoldingType(holding.type);
+                    var qty = Number(holding.quantity) || 0;
+                    var price = Number(holding.latestPrice) || 0;
+                    var value = qty * price;
+                    if (!grouped[key]) { grouped[key] = 0; }
+                    grouped[key] += value;
+                });
+            }
+
+            var netCash = calculateNetCash();
+            if (netCash > 0) {
+                grouped['現金'] = (grouped['現金'] || 0) + netCash;
+            }
+
+            var labels = Object.keys(grouped).filter(function(label) { return grouped[label] > 0; });
+            if (labels.length === 0) {
+                container.textContent = '目前沒有足夠的持倉資料可用於繪圖。';
+                return;
+            }
+
+            var values = labels.map(function(label) { return grouped[label]; });
+
+            Plotly.newPlot(container, [{
+                type: 'pie',
+                labels: labels,
+                values: values,
+                marker: {
+                    colors: ['#4da46d', '#e4b85b', '#5c728a', '#7a4b29', '#88c6a8']
+                },
+                textinfo: 'label+percent',
+                hovertemplate: '%{label}<br>市值: %{value:$,.2f}<extra></extra>'
+            }], {
+                paper_bgcolor: 'transparent',
+                plot_bgcolor: 'transparent',
+                font: { family: 'Plus Jakarta Sans, Noto Sans TC, 微軟正黑體, sans-serif', color: '#3b3b3b' }
+            }, { responsive: true, displayModeBar: false });
+        }
+
+        function openModal(modalId) {
+            var modal = document.getElementById(modalId);
+            if (modal) {
+                modal.classList.add('show');
+            }
+        }
+
+        function closeModal(modalId) {
+            var modal = document.getElementById(modalId);
+            if (modal) {
+                modal.classList.remove('show');
+            }
+        }
+
+        function openHoldingsModal(id) {
+            var title = document.getElementById('holdings-modal-title');
+            var form = document.getElementById('holdings-form');
+            form.reset();
+
+            if (id) {
+                var holding = AppData.holdings.find(function(item) { return item.id === id; });
+                if (holding) {
+                    document.getElementById('holding-id').value = holding.id;
+                    document.getElementById('holding-type').value = holding.type;
+                    document.getElementById('holding-ticker').value = holding.ticker;
+                    document.getElementById('holding-quantity').value = holding.quantity;
+                    document.getElementById('holding-avg-cost').value = holding.avgCost;
+                    document.getElementById('holding-latest-price').value = holding.latestPrice || '';
+                }
+                title.textContent = '編輯持倉';
+            } else {
+                document.getElementById('holding-id').value = '';
+                title.textContent = '新增持倉';
+            }
+
+            openModal('holdings-modal');
+        }
+
+        function openCashflowModal(id) {
+            var title = document.getElementById('cashflow-modal-title');
+            var form = document.getElementById('cashflow-form');
+            form.reset();
+
+            if (id) {
+                var record = AppData.cashFlow.find(function(item) { return item.id === id; });
+                if (record) {
+                    document.getElementById('cashflow-id').value = record.id;
+                    document.getElementById('cashflow-date').value = record.date;
+                    document.getElementById('cashflow-type').value = record.type;
+                    document.getElementById('cashflow-amount').value = record.amount;
+                    document.getElementById('cashflow-notes').value = record.notes || '';
+                }
+                title.textContent = '編輯現金流紀錄';
+            } else {
+                document.getElementById('cashflow-id').value = '';
+                title.textContent = '新增現金流紀錄';
+            }
+
+            openModal('cashflow-modal');
+        }
+
+        function deleteHolding(id) {
+            if (!id) { return; }
+            AppData.holdings = AppData.holdings.filter(function(item) { return item.id !== id; });
+            takeSnapshot();
+            saveData(AppData);
+            renderHoldingsTable();
+            updateDashboard();
+            renderDistributionChart();
+            refreshAssetChart();
+        }
+
+        function deleteCashflow(id) {
+            if (!id) { return; }
+            AppData.cashFlow = AppData.cashFlow.filter(function(item) { return item.id !== id; });
+            takeSnapshot();
+            saveData(AppData);
+            renderCashFlowTable();
+            updateDashboard();
+            renderDistributionChart();
+            refreshAssetChart();
+        }
+
+        function setupHoldingsForm() {
+            var form = document.getElementById('holdings-form');
+            form.addEventListener('submit', function(event) {
+                event.preventDefault();
+                var id = document.getElementById('holding-id').value;
+                var type = document.getElementById('holding-type').value;
+                var ticker = document.getElementById('holding-ticker').value.trim();
+                var quantity = parseFloat(document.getElementById('holding-quantity').value) || 0;
+                var avgCost = parseFloat(document.getElementById('holding-avg-cost').value) || 0;
+                var latestPriceInput = document.getElementById('holding-latest-price').value;
+                var latestPrice = latestPriceInput === '' ? null : parseFloat(latestPriceInput);
+
+                if (!ticker) {
+                    alert('請輸入有效的代碼或名稱。');
+                    return;
+                }
+
+                if (id) {
+                    var existing = AppData.holdings.find(function(item) { return item.id === id; });
+                    if (existing) {
+                        existing.type = type;
+                        existing.ticker = ticker;
+                        existing.quantity = quantity;
+                        existing.avgCost = avgCost;
+                        if (latestPrice !== null) {
+                            existing.latestPrice = latestPrice;
+                            existing.lastUpdated = new Date().toISOString();
+                        }
+                    }
+                } else {
+                    AppData.holdings.push({
+                        id: generateId('hld'),
+                        type: type,
+                        ticker: ticker,
+                        quantity: quantity,
+                        avgCost: avgCost,
+                        latestPrice: latestPrice !== null ? latestPrice : 0,
+                        lastUpdated: latestPrice !== null ? new Date().toISOString() : null
+                    });
+                }
+
+                takeSnapshot();
+                saveData(AppData);
+                closeModal('holdings-modal');
+                renderHoldingsTable();
+                updateDashboard();
+                renderDistributionChart();
+                refreshAssetChart();
+            });
+        }
+
+        function setupCashflowForm() {
+            var form = document.getElementById('cashflow-form');
+            form.addEventListener('submit', function(event) {
+                event.preventDefault();
+                var id = document.getElementById('cashflow-id').value;
+                var date = document.getElementById('cashflow-date').value;
+                var type = document.getElementById('cashflow-type').value;
+                var amount = parseFloat(document.getElementById('cashflow-amount').value);
+                var notes = document.getElementById('cashflow-notes').value.trim();
+
+                if (!date) {
+                    alert('請選擇日期。');
+                    return;
+                }
+                if (!isFinite(amount)) {
+                    alert('請輸入有效金額。');
+                    return;
+                }
+
+                if (id) {
+                    var existing = AppData.cashFlow.find(function(item) { return item.id === id; });
+                    if (existing) {
+                        existing.date = date;
+                        existing.type = type;
+                        existing.amount = amount;
+                        existing.notes = notes;
+                    }
+                } else {
+                    AppData.cashFlow.push({
+                        id: generateId('cf'),
+                        date: date,
+                        type: type,
+                        amount: amount,
+                        notes: notes
+                    });
+                }
+
+                takeSnapshot();
+                saveData(AppData);
+                closeModal('cashflow-modal');
+                renderCashFlowTable();
+                updateDashboard();
+                renderDistributionChart();
+                refreshAssetChart();
+            });
+        }
+
+        function setupModalCloseHandlers() {
+            document.querySelectorAll('[data-close-modal]').forEach(function(button) {
+                button.addEventListener('click', function(event) {
+                    var modal = event.target.closest('.modal-overlay');
+                    if (modal && modal.id) {
+                        closeModal(modal.id);
+                    }
+                });
+            });
+
+            document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
+                overlay.addEventListener('click', function(event) {
+                    if (event.target === overlay) {
+                        closeModal(overlay.id);
+                    }
+                });
+            });
+        }
+
+        function updateHoldingsPrices() {
+            if (!Array.isArray(AppData.holdings) || AppData.holdings.length === 0) {
+                alert('目前沒有持倉資料可更新。');
+                return;
+            }
+
+            var apiKey = '3N4SN05MUX038BYA';
+            var promises = AppData.holdings.map(function(holding) {
+                return fetchLatestPrice(holding.ticker, apiKey)
+                    .then(function(price) {
+                        if (price !== null) {
+                            holding.latestPrice = price;
+                            holding.lastUpdated = new Date().toISOString();
+                        }
+                    })
+                    .catch(function(error) {
+                        console.warn('更新 ' + holding.ticker + ' 報價時發生問題：', error);
+                    });
+            });
+
+            Promise.all(promises).then(function() {
+                takeSnapshot();
+                saveData(AppData);
+                renderHoldingsTable();
+                updateDashboard();
+                renderDistributionChart();
+                refreshAssetChart();
+            });
+        }
+
+        function fetchLatestPrice(ticker, apiKey) {
+            if (!ticker) {
+                return Promise.resolve(null);
+            }
+
+            var url = 'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=' + encodeURIComponent(ticker) + '&apikey=' + apiKey;
+            return fetch(url)
+                .then(function(response) {
+                    if (!response.ok) { throw new Error('HTTP 錯誤：' + response.status); }
+                    return response.json();
+                })
+                .then(function(data) {
+                    if (data && data['Global Quote'] && data['Global Quote']['05. price']) {
+                        return parseFloat(data['Global Quote']['05. price']);
+                    }
+                    return null;
+                })
+                .catch(function(error) {
+                    console.warn('取得 ' + ticker + ' 報價失敗，請確認網路或 API 金鑰設定。', error);
+                    return null;
+                });
+        }
+
+        function fetchHistoricalPrices(ticker, apiKey) {
+            if (!ticker || ticker === 'Account Total' || ticker === 'Cash & Cash Investments') {
+                return Promise.resolve({});
+            }
+            var url = 'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=' + encodeURIComponent(ticker) + '&outputsize=compact&apikey=' + apiKey;
+            return fetch(url)
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (!data || !data['Time Series (Daily)']) {
+                        console.warn('無法獲取 ' + ticker + ' 的歷史數據。', data);
+                        return {};
+                    }
+                    var priceHistory = {};
+                    for (var date in data['Time Series (Daily)']) {
+                        if (Object.prototype.hasOwnProperty.call(data['Time Series (Daily)'], date)) {
+                            priceHistory[date] = parseFloat(data['Time Series (Daily)'][date]['5. adjusted close']);
+                        }
+                    }
+                    return priceHistory;
+                })
+                .catch(function(error) {
+                    console.warn('取得 ' + ticker + ' 歷史數據時發生錯誤：', error);
+                    return {};
+                });
+        }
+
+        function calculateCumulativeCashFlow(targetDate, allCashFlows) {
+            var targetTime = new Date(targetDate).getTime();
+            return allCashFlows.reduce(function(total, record) {
+                var recordTime = new Date(record.date).getTime();
+                if (!isNaN(recordTime) && recordTime <= targetTime) {
+                    return total + (Number(record.amount) || 0);
+                }
+                return total;
+            }, 0);
+        }
+
+        function runHistoricalBackfill() {
+            var statusEl = document.getElementById('backfill-status');
+            var btn = document.getElementById('backfill-snapshots-btn');
+            if (!statusEl || !btn) { return; }
+
+            var apiKey = '3N4SN05MUX038BYA';
+            statusEl.textContent = '正在重建中，請稍候... (可能需時 1-2 分鐘)';
+            btn.disabled = true;
+
+            var holdings = Array.isArray(AppData.holdings) ? AppData.holdings : [];
+            var allCashFlows = Array.isArray(AppData.cashFlow) ? AppData.cashFlow : [];
+            var pricePromises = holdings.map(function(h) { return fetchHistoricalPrices(h.ticker, apiKey); });
+
+            Promise.all(pricePromises)
+                .then(function(results) {
+                    var newSnapshotHistory = [];
+                    var today = new Date();
+                    var startDate = new Date();
+                    startDate.setDate(today.getDate() - 100);
+
+                    for (var d = new Date(startDate.getTime()); d <= today; d.setDate(d.getDate() + 1)) {
+                        var currentDateStr = d.toISOString().slice(0, 10);
+                        var totalHoldingsValue = 0;
+
+                        holdings.forEach(function(holding, index) {
+                            var priceHistory = results[index] || {};
+                            var price = priceHistory[currentDateStr];
+                            if (typeof price === 'undefined') {
+                                price = Number(holding.latestPrice) || 0;
+                            }
+                            totalHoldingsValue += (Number(holding.quantity) || 0) * (Number(price) || 0);
+                        });
+
+                        var cumulativeCash = calculateCumulativeCashFlow(currentDateStr, allCashFlows);
+                        newSnapshotHistory.push({ date: currentDateStr, value: totalHoldingsValue + cumulativeCash });
+                    }
+
+                    if (!AppData.snapshots || !Array.isArray(AppData.snapshots.history)) {
+                        AppData.snapshots = { history: [] };
+                    }
+                    AppData.snapshots.history = newSnapshotHistory;
+                    takeSnapshot();
+                    saveData(AppData);
+                    statusEl.textContent = '歷史快照重建完成！';
+                    btn.disabled = false;
+                    refreshAssetChart();
+                    updateDashboard();
+                    renderDistributionChart();
+                })
+                .catch(function(err) {
+                    console.error('重建歷史快照失敗:', err);
+                    statusEl.textContent = '重建失敗，請檢查 F12 控制台或 API 金鑰限制。';
+                    btn.disabled = false;
+                });
+        }
+
+        function exportData() {
+            var dataStr = JSON.stringify(AppData, null, 2);
+            var blob = new Blob([dataStr], { type: 'application/json' });
+            var url = URL.createObjectURL(blob);
+            var link = document.createElement('a');
+            link.href = url;
+            link.download = 'personal-asset-manager-backup.json';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        function importData(file) {
+            if (!file) { return; }
+            var reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    var result = JSON.parse(event.target.result);
+                    if (!result || typeof result !== 'object') {
+                        throw new Error('JSON 結構不正確');
+                    }
+                    AppData = {
+                        settings: Object.assign({}, defaultDatabase.settings, result.settings || {}),
+                        holdings: Array.isArray(result.holdings) ? result.holdings : [],
+                        cashFlow: Array.isArray(result.cashFlow) ? result.cashFlow : [],
+                        snapshots: result.snapshots && typeof result.snapshots === 'object' ? result.snapshots : { history: [] }
+                    };
+                    takeSnapshot();
+                    saveData(AppData);
+                    renderAll();
+                    alert('匯入完成！');
+                } catch (error) {
+                    console.error('匯入資料時發生錯誤：', error);
+                    alert('匯入失敗，請確認檔案內容。');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function renderAll() {
+            renderHoldingsTable();
+            renderCashFlowTable();
+            updateDashboard();
+            refreshAssetChart();
+            renderDistributionChart();
+        }
+
         // --- Tab 切換功能 ---
         function showTab(tabId) {
             // 隱藏所有內容
@@ -344,171 +1422,91 @@
 
             // 如果切換到儀表板，重新繪製 Plotly 圖表 (確保響應式正常)
             if (tabId === 'dashboard') {
-                window.dispatchEvent(new Event('resize')); 
+                window.dispatchEvent(new Event('resize'));
+                if (chartDiv) {
+                    Plotly.Plots.resize(chartDiv);
+                }
             }
         }
-        
-        // --- V3 圖表初始化與邏輯 (與上一個步驟相同，確保互動性) ---
-        document.addEventListener("DOMContentLoaded", function() {
 
-            // --- 模擬資料 ---
-            var portfolioData = [
-                // ... (此處省略模擬數據，請參考上一步驟的完整代碼貼在這裡)
-                {"date": "2025-08-01", "value": 9438.60}, {"date": "2025-08-02", "value": 9438.60},
-                {"date": "2025-08-03", "value": 9438.60}, {"date": "2025-08-04", "value": 9629.54},
-                {"date": "2025-08-05", "value": 9515.51}, {"date": "2025-08-06", "value": 9358.84},
-                {"date": "2025-08-07", "value": 9707.19}, {"date": "2025-08-08", "value": 9765.15},
-                {"date": "2025-08-11", "value": 9771.35}, {"date": "2025-08-12", "value": 9889.35},
-                {"date": "2025-08-13", "value": 10007.17}, {"date": "2025-08-14", "value": 9922.01},
-                {"date": "2025-08-15", "value": 9865.30}, {"date": "2025-08-18", "value": 9878.92},
-                {"date": "2025-08-19", "value": 9568.16}, {"date": "2025-08-20", "value": 9493.41},
-                {"date": "2025-08-21", "value": 9441.74}, {"date": "2025-08-22", "value": 9652.24},
-                {"date": "2025-08-25", "value": 9621.21}, {"date": "2025-08-26", "value": 9717.21},
-                {"date": "2025-08-27", "value": 9745.35}, {"date": "2025-08-28", "value": 9794.51},
-                {"date": "2025-08-29", "value": 9572.56}, {"date": "2025-09-01", "value": 9572.56},
-                {"date": "2025-09-02", "value": 9492.37}, {"date": "2025-09-03", "value": 9627.41},
-                {"date": "2025-09-04", "value": 9651.03}, {"date": "2025-09-05", "value": 9559.39},
-                {"date": "2025-09-08", "value": 9587.91}, {"date": "2025-09-09", "value": 9901.41},
-                {"date": "2025-09-10", "value": 10056.40}, {"date": "2025-09-11", "value": 9991.59},
-                {"date": "2025-09-12", "value": 10073.35}, {"date": "2025-09-15", "value": 10204.15},
-                {"date": "2025-09-16", "value": 10182.67}, {"date": "2025-09-17", "value": 10177.85},
-                {"date": "2025-09-18", "value": 10239.50}, {"date": "2025-09-19", "value": 10251.29},
-                {"date": "2025-09-22", "value": 10437.17}, {"date": "2025-09-23", "value": 10525.60},
-                {"date": "2025-09-24", "value": 10524.86}, {"date": "2025-09-25", "value": 10428.18},
-                {"date": "2025-09-26", "value": 10392.13}, {"date": "2025-09-29", "value": 10456.27},
-                {"date": "2025-09-30", "value": 10542.23}, {"date": "2025-10-01", "value": 10701.44},
-                {"date": "2025-10-02", "value": 10773.38}, {"date": "2025-10-03", "value": 10731.75},
-                {"date": "2025-10-06", "value": 11470.41}, {"date": "2025-10-07", "value": 11416.19},
-                {"date": "2025-10-08", "value": 11912.40}, {"date": "2025-10-09", "value": 11879.27},
-                {"date": "2025-10-10", "value": 11259.05}, {"date": "2025-10-13", "value": 11645.27},
-                {"date": "2025-10-14", "value": 11512.40}, {"date": "2025-10-15", "value": 11921.63},
-                {"date": "2025-10-16", "value": 13924.58}, {"date": "2025-10-17", "value": 13826.20},
-                {"date": "2025-10-20", "value": 13990.86}, {"date": "2025-10-21", "value": 13880.44},
-                {"date": "2025-10-22", "value": 13671.93}, {"date": "2025-10-23", "value": 13839.65},
-                {"date": "2025-10-24", "value": 14181.53}, {"date": "2025-10-27", "value": 14436.48},
-                {"date": "2025-10-28", "value": 14478.48}, {"date": "2025-10-29", "value": 14628.23}
-            ];
+        document.addEventListener('DOMContentLoaded', function() {
+            loadData();
+            setupHoldingsForm();
+            setupCashflowForm();
+            setupModalCloseHandlers();
+            initAssetChart();
+            renderAll();
 
-            var xData = portfolioData.map(function(item) { return item.date; });
-            var yData = portfolioData.map(function(item) { return item.value; });
-            
-            var dataMap = portfolioData.map(function(item) {
-                return {
-                    time: new Date(item.date).getTime(),
-                    value: item.value
-                };
+            document.getElementById('add-holding-btn').addEventListener('click', function() {
+                openHoldingsModal();
             });
 
-            var chartDiv = document.getElementById('asset-chart');
+            document.getElementById('add-cashflow-btn').addEventListener('click', function() {
+                openCashflowModal();
+            });
 
-            // --- 輔助函式 (ES5) ---
-            function formatCurrency(num) {
-                var sign = num >= 0 ? '+' : '−';
-                return sign + '$' + Math.abs(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            }
+            document.getElementById('update-prices-btn').addEventListener('click', function() {
+                updateHoldingsPrices();
+            });
 
-            function formatDate(dateString) {
-                return new Date(dateString).toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' });
-            }
-            
-            // --- Plotly 圖表設定 (ES5) ---
-            
-            var baseLayout = {
-                font: { family: 'Plus Jakarta Sans, Noto Sans TC, 微軟正黑體, sans-serif', color: '#3b3b3b' },
-                paper_bgcolor: 'transparent', plot_bgcolor: 'transparent', dragmode: 'select', 
-                selectdirection: 'h', 
-                xaxis: { type: 'date', title: '日期', gridcolor: '#eeeeee' },
-                yaxis: { title: '資產總值', tickprefix: '$', tickformat: '~s', gridcolor: '#eeeeee' },
-                hovermode: 'x unified',
-                margin: { l: 60, r: 30, t: 30, b: 50 },
-                newselection: { line: { color: 'rgba(0, 0, 0, 0)' } },
-                shapes: [],
-                annotations: [] 
-            };
-
-            var trace1 = {
-                x: xData,
-                y: yData,
-                type: 'scatter', 
-                mode: 'lines',
-                name: '資產總值',
-                line: { color: '#5c728a', width: 3 }, 
-                hoverinfo: 'x+y', 
-                hovertemplate: '%{x|%Y-%m-%d}<br><b>%{y:$,.2f}</b><extra></extra>'
-            };
-
-            var config = { responsive: true, displayModeBar: false, scrollZoom: false };
-
-            Plotly.newPlot(chartDiv, [trace1], baseLayout, config);
-
-            // --- V3 核心互動事件 (90 FPS) ---
-            var lastUpdateTime = 0;
-            var THROTTLE_DELAY = 11; 
-
-            chartDiv.on('plotly_selecting', function(eventData) {
-                
-                var now = Date.now();
-                if (now - lastUpdateTime < THROTTLE_DELAY) { return; }
-                lastUpdateTime = now; 
-                
-                if (!eventData || !eventData.range) { 
-                    Plotly.relayout(chartDiv, { shapes: [], annotations: [] }); // 清除
-                    return; 
+            document.getElementById('backfill-snapshots-btn').addEventListener('click', function() {
+                if (confirm('這將消耗您的 API 額度並覆蓋歷史圖表，確定要重建嗎？')) {
+                    runHistoricalBackfill();
                 }
+            });
 
-                var xRange = eventData.range.x;
-                var startTime = new Date(xRange[0]).getTime();
-                var endTime = new Date(xRange[1]).getTime();
-                
-                var selectedPoints = dataMap.filter(function(d) {
-                    return d.time >= startTime && d.time <= endTime;
-                });
+            document.getElementById('export-json-btn').addEventListener('click', function() {
+                exportData();
+            });
 
-                if (selectedPoints.length < 2) {
-                    Plotly.relayout(chartDiv, { shapes: [], annotations: [] });
-                    return;
+            document.getElementById('import-json-btn').addEventListener('click', function() {
+                document.getElementById('import-json-input').click();
+            });
+
+            document.getElementById('import-json-input').addEventListener('change', function(event) {
+                var file = event.target.files[0];
+                importData(file);
+                event.target.value = '';
+            });
+
+            document.getElementById('holdings-table-body').addEventListener('click', function(event) {
+                var action = event.target.dataset.action;
+                var row = event.target.closest('tr');
+                if (!row) { return; }
+                var id = row.dataset.id;
+
+                if (action === 'edit') {
+                    openHoldingsModal(id);
+                    event.stopPropagation();
+                } else if (action === 'delete') {
+                    if (confirm('確定要刪除此持倉紀錄嗎？')) {
+                        deleteHolding(id);
+                    }
+                    event.stopPropagation();
+                } else {
+                    openHoldingsModal(id);
                 }
-
-                var startData = selectedPoints[0];
-                var endData = selectedPoints[selectedPoints.length - 1];
-                var valueChange = endData.value - startData.value;
-                var percentChange = (valueChange / startData.value) * 100;
-                var isProfit = valueChange >= 0;
-
-                var trendColor = isProfit ? '#4da46d' : '#7a4b29'; 
-                var trendFillColor = isProfit ? 'rgba(77, 164, 109, 0.1)' : 'rgba(122, 75, 41, 0.1)';
-                var sign = isProfit ? '+' : ''; 
-
-                var yMin = Math.min.apply(null, yData); 
-                var yMax = Math.max.apply(null, yData); 
-                var yAnnotationPos = yMax * 0.95; 
-
-                var startLine = { type: 'line', x0: xRange[0], x1: xRange[0], y0: yMin, y1: yMax, line: { color: '#5c728a', width: 1, dash: 'dot' } };
-                var endLine = { type: 'line', x0: xRange[1], x1: xRange[1], y0: yMin, y1: yMax, line: { color: '#5c728a', width: 1, dash: 'dot' } };
-                var fillRect = { type: 'rect', x0: xRange[0], x1: xRange[1], y0: yMin, y1: yMax, fillcolor: trendFillColor, line: { width: 0 } };
-                
-                var textLine1 = '<b><span style="color:' + trendColor + '; font-size: 1.1em;">' + formatCurrency(valueChange) + ' (' + sign + percentChange.toFixed(2) + '%)</span></b>';
-                var textLine2 = '<span style;="color:#5c728a; font-size: 0.9em;">' + formatDate(xRange[0]) + ' - ' + formatDate(xRange[1]) + '</span>'; 
-                
-                var newAnnotation = {
-                    x: (startTime + endTime) / 2, y: yAnnotationPos, text: textLine1 + '<br>' + textLine2, showarrow: false,
-                    bgcolor: 'rgba(255, 255, 255, 0.95)', bordercolor: 'rgba(92, 114, 138, 0.2)', borderwidth: 1, borderpad: 8,
-                    font: { family: 'Plus Jakarta Sans, Noto Sans TC, 微軟正黑體, sans-serif' }, align: 'center'
-                };
-
-                Plotly.relayout(chartDiv, {
-                    shapes: [startLine, endLine, fillRect],
-                    annotations: [newAnnotation]
-                });
             });
 
-            chartDiv.on('plotly_deselect', function() {
-                Plotly.relayout(chartDiv, { shapes: [], annotations: [] });
+            document.getElementById('cashflow-table-body').addEventListener('click', function(event) {
+                var action = event.target.dataset.action;
+                var row = event.target.closest('tr');
+                if (!row) { return; }
+                var id = row.dataset.id;
+
+                if (action === 'edit') {
+                    openCashflowModal(id);
+                    event.stopPropagation();
+                } else if (action === 'delete') {
+                    if (confirm('確定要刪除此現金流紀錄嗎？')) {
+                        deleteCashflow(id);
+                    }
+                    event.stopPropagation();
+                } else {
+                    openCashflowModal(id);
+                }
             });
-        });
-        
-        // 初始載入時顯示儀表板
-        document.addEventListener("DOMContentLoaded", function() {
+
             showTab('dashboard');
         });
     </script>
