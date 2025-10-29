@@ -161,6 +161,40 @@
         .trend-icon { font-size: 1rem; margin-right: 8px; }
         .btn-update { background-color: #e4b85b; color: white; border: none; border-radius: 10px; padding: 10px 15px; font-weight: 600; cursor: pointer; transition: background-color 0.2s ease; box-shadow: 0 2px 8px rgba(228, 184, 91, 0.3); font-size: 0.9rem; margin-left: 15px; }
         .btn-update:hover { background-color: #d1a852; }
+
+        /* --- Modal Styles --- */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 500px;
+            border-radius: 20px;
+        }
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -266,8 +300,9 @@
             <div class="card">
                 <h2 class="subtitle">CSV 匯入/匯出</h2>
                 <p>將持倉資料匯出為 JSON 備份或 CSV 檔案，以便管理和備份。</p>
-                <button class="btn-update" style="background-color: #5c728a;">匯出 JSON 備份</button>
-                <button class="btn-update" style="background-color: #5c728a;">從 JSON 匯入</button>
+                <button class="btn-update" style="background-color: #5c728a;" onclick="exportData()">匯出 JSON 備份</button>
+                <button class="btn-update" style="background-color: #5c728a;" onclick="document.getElementById('import-file').click()">從 JSON 匯入</button>
+                <input type="file" id="import-file" style="display: none;" onchange="importData(event)">
             </div>
         </div>
 
@@ -325,6 +360,51 @@
 
     </div>
 
+    <!-- Holdings Modal -->
+    <div id="holdings-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2 id="modal-title">新增持倉</h2>
+            <form id="holdings-form">
+                <input type="hidden" id="holding-id">
+                <p>類型:
+                    <select id="holding-type">
+                        <option value="Stock">股票</option>
+                        <option value="Cash">現金</option>
+                        <option value="Cryptocurrency">加密貨幣</option>
+                    </select>
+                </p>
+                <p>代碼: <input type="text" id="holding-ticker" required></p>
+                <p>數量: <input type="number" id="holding-quantity" required></p>
+                <p>平均成本: <input type="number" id="holding-avg-cost" required></p>
+                <button type="submit" class="btn-primary">儲存</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Cash Flow Modal -->
+    <div id="cash-flow-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2 id="cash-flow-modal-title">新增交易</h2>
+            <form id="cash-flow-form">
+                <input type="hidden" id="cash-flow-id">
+                <p>日期: <input type="date" id="cash-flow-date" required></p>
+                <p>類型:
+                    <select id="cash-flow-type">
+                        <option value="Deposit">入金</option>
+                        <option value="Withdrawal">出金</option>
+                        <option value="Dividend">股息</option>
+                        <option value="Fee">費用</option>
+                    </select>
+                </p>
+                <p>金額: <input type="number" id="cash-flow-amount" required></p>
+                <p>備註: <input type="text" id="cash-flow-notes"></p>
+                <button type="submit" class="btn-primary">儲存</button>
+            </form>
+        </div>
+    </div>
+
     <script>
         // --- Tab 切換功能 ---
         function showTab(tabId) {
@@ -350,9 +430,14 @@
         
         // --- V3 圖表初始化與邏輯 (與上一個步驟相同，確保互動性) ---
         document.addEventListener("DOMContentLoaded", function() {
+            AppData = loadData();
+            renderHoldingsTable();
+            renderCashFlowTable();
+            calculateTotalValue();
+            showTab('dashboard');
 
             // --- 模擬資料 ---
-            var portfolioData = [
+            var portfolioData = Object.keys(AppData.snapshots).length > 0 ? AppData.snapshots : [
                 // ... (此處省略模擬數據，請參考上一步驟的完整代碼貼在這裡)
                 {"date": "2025-08-01", "value": 9438.60}, {"date": "2025-08-02", "value": 9438.60},
                 {"date": "2025-08-03", "value": 9438.60}, {"date": "2025-08-04", "value": 9629.54},
@@ -507,9 +592,229 @@
             });
         });
         
-        // 初始載入時顯示儀表板
-        document.addEventListener("DOMContentLoaded", function() {
-            showTab('dashboard');
+        // --- Data Management ---
+        let AppData = {};
+
+        function saveData(data) {
+            localStorage.setItem('personalAssetManagerDB', JSON.stringify(data));
+        }
+
+        function loadData() {
+            const data = localStorage.getItem('personalAssetManagerDB');
+            if (data) {
+                return JSON.parse(data);
+            } else {
+                // Default data structure
+                return {
+                    settings: {
+                        userName: "User",
+                        currency: "TWD"
+                    },
+                    holdings: [],
+                    cashFlow: [],
+                    snapshots: {}
+                };
+            }
+        }
+
+        // --- Data Backup and Restore ---
+        function exportData() {
+            const dataStr = JSON.stringify(AppData, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+
+            const exportFileDefaultName = 'AppData.json';
+
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+        }
+
+        function importData(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const importedData = JSON.parse(e.target.result);
+                        AppData = importedData;
+                        saveData(AppData);
+                        renderHoldingsTable();
+                        renderCashFlowTable();
+                        calculateTotalValue();
+                        alert('Data imported successfully!');
+                    } catch (error) {
+                        alert('Error importing data. Please check the file format.');
+                    }
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        // --- Dashboard Calculations ---
+        function calculateTotalValue() {
+            let totalValue = 0;
+            AppData.holdings.forEach(holding => {
+                const latestPrice = holding.latestPrice || holding.avgCost; // Placeholder
+                totalValue += holding.quantity * latestPrice;
+            });
+            document.querySelector('.total-value').innerText = `$${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        }
+
+        document.querySelector('#dashboard .btn-update').addEventListener('click', () => {
+            alert('Fetching latest prices... (Not implemented yet)');
+        });
+
+        // --- Cash Flow CRUD ---
+        const cashFlowModal = document.getElementById('cash-flow-modal');
+        const cashFlowForm = document.getElementById('cash-flow-form');
+        const cashFlowTableBody = document.getElementById('cashflow-table-body');
+
+        function renderCashFlowTable() {
+            cashFlowTableBody.innerHTML = '';
+            AppData.cashFlow.forEach(flow => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${flow.date}</td>
+                    <td>${flow.type}</td>
+                    <td>${flow.amount}</td>
+                    <td>${flow.notes}</td>
+                    <td>
+                        <button onclick="editCashFlow('${flow.id}')">編輯</button>
+                        <button onclick="deleteCashFlow('${flow.id}')">刪除</button>
+                    </td>
+                `;
+                cashFlowTableBody.appendChild(row);
+            });
+        }
+
+        function editCashFlow(id) {
+            const flow = AppData.cashFlow.find(f => f.id === id);
+            if (flow) {
+                document.getElementById('cash-flow-id').value = flow.id;
+                document.getElementById('cash-flow-date').value = flow.date;
+                document.getElementById('cash-flow-type').value = flow.type;
+                document.getElementById('cash-flow-amount').value = flow.amount;
+                document.getElementById('cash-flow-notes').value = flow.notes;
+                document.getElementById('cash-flow-modal-title').innerText = '編輯交易';
+                cashFlowModal.style.display = 'block';
+            }
+        }
+
+        function deleteCashFlow(id) {
+            AppData.cashFlow = AppData.cashFlow.filter(f => f.id !== id);
+            saveData(AppData);
+            renderCashFlowTable();
+        }
+
+        document.querySelector('#cashflow .btn-primary').addEventListener('click', () => {
+            cashFlowForm.reset();
+            document.getElementById('cash-flow-id').value = '';
+            document.getElementById('cash-flow-modal-title').innerText = '新增交易';
+            cashFlowModal.style.display = 'block';
+        });
+
+        document.querySelector('#cash-flow-modal .close-button').addEventListener('click', () => {
+            cashFlowModal.style.display = 'none';
+        });
+
+        cashFlowForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const flow = {
+                id: document.getElementById('cash-flow-id').value || Date.now().toString(),
+                date: document.getElementById('cash-flow-date').value,
+                type: document.getElementById('cash-flow-type').value,
+                amount: parseFloat(document.getElementById('cash-flow-amount').value),
+                notes: document.getElementById('cash-flow-notes').value
+            };
+
+            const existingIndex = AppData.cashFlow.findIndex(f => f.id === flow.id);
+            if (existingIndex > -1) {
+                AppData.cashFlow[existingIndex] = flow;
+            } else {
+                AppData.cashFlow.push(flow);
+            }
+
+            saveData(AppData);
+            renderCashFlowTable();
+            cashFlowModal.style.display = 'none';
+        });
+
+        // --- Holdings CRUD ---
+        const holdingsModal = document.getElementById('holdings-modal');
+        const holdingsForm = document.getElementById('holdings-form');
+        const holdingsTableBody = document.getElementById('holdings-table-body');
+
+        function renderHoldingsTable() {
+            holdingsTableBody.innerHTML = '';
+            AppData.holdings.forEach(holding => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${holding.ticker}</td>
+                    <td>${holding.type}</td>
+                    <td>${holding.quantity}</td>
+                    <td>${holding.avgCost}</td>
+                    <td>N/A</td>
+                    <td>N/A</td>
+                    <td>
+                        <button onclick="editHolding('${holding.id}')">編輯</button>
+                        <button onclick="deleteHolding('${holding.id}')">刪除</button>
+                    </td>
+                `;
+                holdingsTableBody.appendChild(row);
+            });
+        }
+
+        function editHolding(id) {
+            const holding = AppData.holdings.find(h => h.id === id);
+            if (holding) {
+                document.getElementById('holding-id').value = holding.id;
+                document.getElementById('holding-type').value = holding.type;
+                document.getElementById('holding-ticker').value = holding.ticker;
+                document.getElementById('holding-quantity').value = holding.quantity;
+                document.getElementById('holding-avg-cost').value = holding.avgCost;
+                document.getElementById('modal-title').innerText = '編輯持倉';
+                holdingsModal.style.display = 'block';
+            }
+        }
+
+        function deleteHolding(id) {
+            AppData.holdings = AppData.holdings.filter(h => h.id !== id);
+            saveData(AppData);
+            renderHoldingsTable();
+        }
+
+        document.querySelector('#holdings .btn-primary').addEventListener('click', () => {
+            holdingsForm.reset();
+            document.getElementById('holding-id').value = '';
+            document.getElementById('modal-title').innerText = '新增持倉';
+            holdingsModal.style.display = 'block';
+        });
+
+        document.querySelector('#holdings-modal .close-button').addEventListener('click', () => {
+            holdingsModal.style.display = 'none';
+        });
+
+        holdingsForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const holding = {
+                id: document.getElementById('holding-id').value || Date.now().toString(),
+                type: document.getElementById('holding-type').value,
+                ticker: document.getElementById('holding-ticker').value,
+                quantity: parseFloat(document.getElementById('holding-quantity').value),
+                avgCost: parseFloat(document.getElementById('holding-avg-cost').value)
+            };
+
+            const existingIndex = AppData.holdings.findIndex(h => h.id === holding.id);
+            if (existingIndex > -1) {
+                AppData.holdings[existingIndex] = holding;
+            } else {
+                AppData.holdings.push(holding);
+            }
+
+            saveData(AppData);
+            renderHoldingsTable();
+            holdingsModal.style.display = 'none';
         });
     </script>
 </body>
