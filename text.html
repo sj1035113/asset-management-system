@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>個人資產管理系統 - 持倉與現金流</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
+    <style>
+        /* --- 基礎與字體設定 --- */
+        body {
+            background-color: #f9f7f2; /* 主色：米白 */
+            color: #3b3b3b; /* 深灰文字 */
+            font-family: 'Plus Jakarta Sans', 'Noto Sans TC', '微軟正黑體', sans-serif;
+            letter-spacing: 0.2px; 
+            padding: 30px;
+            margin: 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: auto;
+        }
+        .title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #3b3b3b;
+            margin-bottom: 20px;
+            letter-spacing: 0.5px;
+        }
+        .subtitle {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #5c728a; /* 靜藍灰 */
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        /* --- Tab 導航欄 --- */
+        .tab-bar {
+            margin-bottom: 30px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        .tab-button {
+            background: transparent;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #5c728a;
+            cursor: pointer;
+            transition: color 0.2s, border-bottom 0.2s;
+        }
+        .tab-button.active {
+            color: #e4b85b; /* 溫暖黃強調色 */
+            border-bottom: 3px solid #e4b85b;
+        }
+
+        /* --- 卡片式設計 (Card Layout) --- */
+        .card {
+            background: #ffffff;
+            border-radius: 20px; /* 16px ~ 24px 圓角 */
+            padding: 25px;
+            box-shadow: 0 4px 25px rgba(0,0,0,0.04); /* 極淡陰影 */
+            margin-bottom: 25px; /* 卡片間距 */
+        }
+
+        /* --- 列表按鈕 --- */
+        .list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .btn-primary {
+            background-color: #4da46d; /* 草綠 */
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 10px 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            box-shadow: 0 2px 8px rgba(77, 164, 109, 0.3);
+            font-size: 0.9rem;
+        }
+        .btn-primary:hover {
+            background-color: #3c8257;
+        }
+
+        /* --- 表格樣式 (文青簡約風) --- */
+        .data-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 10px; /* 增加行間距 */
+        }
+        .data-table th {
+            text-align: left;
+            padding: 10px 15px;
+            font-size: 0.9rem;
+            color: #5c728a;
+            font-weight: 600;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .data-table td {
+            background: #fcfcfc; /* 淺色行背景，增加層次 */
+            padding: 15px;
+            font-size: 1rem;
+            border-top: 1px solid #f0f0f0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        /* 圓角處理 */
+        .data-table tr:first-child td:first-child { border-top-left-radius: 10px; }
+        .data-table tr:first-child td:last-child { border-top-right-radius: 10px; }
+        .data-table tr:last-child td:first-child { border-bottom-left-radius: 10px; }
+        .data-table tr:last-child td:last-child { border-bottom-right-radius: 10px; }
+
+        .data-table tbody tr:hover td {
+            background: #f5f5f5;
+            cursor: pointer;
+        }
+
+        /* 漲跌幅顏色 */
+        .profit { color: #4da46d; } /* 草綠 */
+        .loss { color: #7a4b29; } /* 柔棕 */
+
+
+        /* --- 儀表板的佈局 (CSS 延續) --- */
+        .dashboard-layout {
+            display: grid;
+            gap: 25px;
+            grid-template-columns: 2fr 1fr;
+            grid-template-areas: "stats stats" "chart distribution"; 
+        }
+        @media (max-width: 992px) {
+            .dashboard-layout {
+                grid-template-columns: 1fr;
+                grid-template-areas: "stats" "distribution" "chart"; 
+            }
+        }
+        .stats-row { 
+            grid-area: stats; 
+            display: grid;
+            grid-template-columns: 2fr 1fr; 
+            gap: 20px;
+        }
+        @media (max-width: 768px) {
+            .stats-row {
+                grid-template-columns: 1fr;
+            }
+        }
+        .chart-area { grid-area: chart; }
+        .distribution-area { grid-area: distribution; }
+
+        .total-value { font-size: 3.5rem; font-weight: 700; line-height: 1.2; color: #2e2e2e; margin-bottom: 15px; }
+        .trend-display { font-size: 1.5rem; font-weight: 600; display: flex; align-items: center; }
+        .trend-icon { font-size: 1rem; margin-right: 8px; }
+        .btn-update { background-color: #e4b85b; color: white; border: none; border-radius: 10px; padding: 10px 15px; font-weight: 600; cursor: pointer; transition: background-color 0.2s ease; box-shadow: 0 2px 8px rgba(228, 184, 91, 0.3); font-size: 0.9rem; margin-left: 15px; }
+        .btn-update:hover { background-color: #d1a852; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="tab-bar">
+            <button class="tab-button active" onclick="showTab('dashboard')">儀表板</button>
+            <button class="tab-button" onclick="showTab('holdings')">持倉管理</button>
+            <button class="tab-button" onclick="showTab('cashflow')">現金流紀錄</button>
+        </div>
+        
+        <div id="dashboard" class="tab-content">
+            <h1 class="title">資產總覽</h1>
+            
+            <div class="dashboard-layout">
+                <div class="stats-row">
+                    <div class="card asset-total-card">
+                        <div class="subtitle">目前總資產 (Total Net Worth)</div>
+                        <div class="total-value">$1,234,567.89</div>
+                        
+                        <p style="font-size: 0.9rem; color: #5c728a;">
+                            上次更新：<span id="last-updated-time">2025/10/29 15:30:00</span>
+                            <button class="btn-update">手動更新報價</button>
+                        </p>
+                    </div>
+                    
+                    <div class="card stat-small-card">
+                        <div>
+                            <div class="subtitle">年度報酬率 (YTD Return)</div>
+                            <div class="trend-display loss">
+                                <span class="trend-icon">▼</span> −$5,000.00
+                            </div>
+                        </div>
+                        <div style="font-size: 0.85rem; color: #5c728a;">
+                            −0.41%
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card chart-area">
+                    <h2 class="subtitle">資產總值變化趨勢圖</h2>
+                    <div id="asset-chart" style="height: 350px;">
+                        </div>
+                </div>
+
+                <div class="card distribution-area">
+                    <h2 class="subtitle">資產分佈圓餅圖</h2>
+                    <div id="distribution-chart" style="height: 350px;">
+                        [圓餅圖佔位]
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="holdings" class="tab-content" style="display: none;">
+            <h1 class="title">持倉管理</h1>
+            
+            <div class="card">
+                <div class="list-header">
+                    <h2 class="subtitle" style="margin-bottom: 0;">投資清單 (Holdings List)</h2>
+                    <button class="btn-primary">＋ 新增持倉</button>
+                </div>
+                
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>名稱 / 代碼</th>
+                            <th>類別</th>
+                            <th>股數 / 數量</th>
+                            <th>平均成本</th>
+                            <th>現價</th>
+                            <th>總報酬率</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="holdings-table-body">
+                        <tr>
+                            <td>台積電 <br><span style="font-size:0.85rem; color:#5c728a;">2330.TW</span></td>
+                            <td>股票</td>
+                            <td>1,000</td>
+                            <td>$600.50</td>
+                            <td>$625.00</td>
+                            <td class="profit">+$24,500 (+4.08%)</td>
+                            <td><span style="font-size:0.8rem; color:#5c728a;">編輯 | 刪除</span></td>
+                        </tr>
+                         <tr>
+                            <td>Bitcoin <br><span style="font-size:0.85rem; color:#5c728a;">BTC</span></td>
+                            <td>加密貨幣</td>
+                            <td>0.5</td>
+                            <td>$45,000.00</td>
+                            <td>$43,500.00</td>
+                            <td class="loss">−$750 (−3.33%)</td>
+                            <td><span style="font-size:0.8rem; color:#5c728a;">編輯 | 刪除</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <p style="font-size: 0.9rem; color: #5c728a; margin-top: 20px;">
+                    * 點擊表格行可編輯資料
+                </p>
+            </div>
+            
+            <div class="card">
+                <h2 class="subtitle">CSV 匯入/匯出</h2>
+                <p>將持倉資料匯出為 JSON 備份或 CSV 檔案，以便管理和備份。</p>
+                <button class="btn-update" style="background-color: #5c728a;">匯出 JSON 備份</button>
+                <button class="btn-update" style="background-color: #5c728a;">從 JSON 匯入</button>
+            </div>
+        </div>
+
+        <div id="cashflow" class="tab-content" style="display: none;">
+            <h1 class="title">現金流紀錄</h1>
+
+            <div class="card">
+                <div class="list-header">
+                    <h2 class="subtitle" style="margin-bottom: 0;">交易記錄 (Transaction History)</h2>
+                    <button class="btn-primary">＋ 新增交易</button>
+                </div>
+
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>日期</th>
+                            <th>交易類型</th>
+                            <th>金額</th>
+                            <th>備註</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cashflow-table-body">
+                        <tr>
+                            <td>2025/10/01</td>
+                            <td><span class="profit">存入資金 (Deposit)</span></td>
+                            <td>+$100,000.00</td>
+                            <td>初始投資金額</td>
+                            <td><span style="font-size:0.8rem; color:#5c728a;">編輯 | 刪除</span></td>
+                        </tr>
+                        <tr>
+                            <td>2025/10/15</td>
+                            <td><span class="profit">股息收入 (Dividend)</span></td>
+                            <td>+$1,200.00</td>
+                            <td>2330.TW 股息</td>
+                            <td><span style="font-size:0.8rem; color:#5c728a;">編輯 | 刪除</span></td>
+                        </tr>
+                        <tr>
+                            <td>2025/10/20</td>
+                            <td><span class="loss">手續費 (Fee)</span></td>
+                            <td>−$50.00</td>
+                            <td>美股交易手續費</td>
+                            <td><span style="font-size:0.8rem; color:#5c728a;">編輯 | 刪除</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <h2 class="subtitle">月報表 (Monthly Report)</h2>
+                <p>這裡未來會顯示月流入、流出總額以及淨現金流。</p>
+            </div>
+
+        </div>
+
+    </div>
+
+    <script>
+        // --- Tab 切換功能 ---
+        function showTab(tabId) {
+            // 隱藏所有內容
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.style.display = 'none';
+            });
+            // 移除所有按鈕的 active 狀態
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.remove('active');
+            });
+
+            // 顯示選中的內容
+            document.getElementById(tabId).style.display = 'block';
+            // 標記選中的按鈕
+            document.querySelector(`.tab-button[onclick*='${tabId}']`).classList.add('active');
+
+            // 如果切換到儀表板，重新繪製 Plotly 圖表 (確保響應式正常)
+            if (tabId === 'dashboard') {
+                window.dispatchEvent(new Event('resize')); 
+            }
+        }
+        
+        // --- V3 圖表初始化與邏輯 (與上一個步驟相同，確保互動性) ---
+        document.addEventListener("DOMContentLoaded", function() {
+
+            // --- 模擬資料 ---
+            var portfolioData = [
+                // ... (此處省略模擬數據，請參考上一步驟的完整代碼貼在這裡)
+                {"date": "2025-08-01", "value": 9438.60}, {"date": "2025-08-02", "value": 9438.60},
+                {"date": "2025-08-03", "value": 9438.60}, {"date": "2025-08-04", "value": 9629.54},
+                {"date": "2025-08-05", "value": 9515.51}, {"date": "2025-08-06", "value": 9358.84},
+                {"date": "2025-08-07", "value": 9707.19}, {"date": "2025-08-08", "value": 9765.15},
+                {"date": "2025-08-11", "value": 9771.35}, {"date": "2025-08-12", "value": 9889.35},
+                {"date": "2025-08-13", "value": 10007.17}, {"date": "2025-08-14", "value": 9922.01},
+                {"date": "2025-08-15", "value": 9865.30}, {"date": "2025-08-18", "value": 9878.92},
+                {"date": "2025-08-19", "value": 9568.16}, {"date": "2025-08-20", "value": 9493.41},
+                {"date": "2025-08-21", "value": 9441.74}, {"date": "2025-08-22", "value": 9652.24},
+                {"date": "2025-08-25", "value": 9621.21}, {"date": "2025-08-26", "value": 9717.21},
+                {"date": "2025-08-27", "value": 9745.35}, {"date": "2025-08-28", "value": 9794.51},
+                {"date": "2025-08-29", "value": 9572.56}, {"date": "2025-09-01", "value": 9572.56},
+                {"date": "2025-09-02", "value": 9492.37}, {"date": "2025-09-03", "value": 9627.41},
+                {"date": "2025-09-04", "value": 9651.03}, {"date": "2025-09-05", "value": 9559.39},
+                {"date": "2025-09-08", "value": 9587.91}, {"date": "2025-09-09", "value": 9901.41},
+                {"date": "2025-09-10", "value": 10056.40}, {"date": "2025-09-11", "value": 9991.59},
+                {"date": "2025-09-12", "value": 10073.35}, {"date": "2025-09-15", "value": 10204.15},
+                {"date": "2025-09-16", "value": 10182.67}, {"date": "2025-09-17", "value": 10177.85},
+                {"date": "2025-09-18", "value": 10239.50}, {"date": "2025-09-19", "value": 10251.29},
+                {"date": "2025-09-22", "value": 10437.17}, {"date": "2025-09-23", "value": 10525.60},
+                {"date": "2025-09-24", "value": 10524.86}, {"date": "2025-09-25", "value": 10428.18},
+                {"date": "2025-09-26", "value": 10392.13}, {"date": "2025-09-29", "value": 10456.27},
+                {"date": "2025-09-30", "value": 10542.23}, {"date": "2025-10-01", "value": 10701.44},
+                {"date": "2025-10-02", "value": 10773.38}, {"date": "2025-10-03", "value": 10731.75},
+                {"date": "2025-10-06", "value": 11470.41}, {"date": "2025-10-07", "value": 11416.19},
+                {"date": "2025-10-08", "value": 11912.40}, {"date": "2025-10-09", "value": 11879.27},
+                {"date": "2025-10-10", "value": 11259.05}, {"date": "2025-10-13", "value": 11645.27},
+                {"date": "2025-10-14", "value": 11512.40}, {"date": "2025-10-15", "value": 11921.63},
+                {"date": "2025-10-16", "value": 13924.58}, {"date": "2025-10-17", "value": 13826.20},
+                {"date": "2025-10-20", "value": 13990.86}, {"date": "2025-10-21", "value": 13880.44},
+                {"date": "2025-10-22", "value": 13671.93}, {"date": "2025-10-23", "value": 13839.65},
+                {"date": "2025-10-24", "value": 14181.53}, {"date": "2025-10-27", "value": 14436.48},
+                {"date": "2025-10-28", "value": 14478.48}, {"date": "2025-10-29", "value": 14628.23}
+            ];
+
+            var xData = portfolioData.map(function(item) { return item.date; });
+            var yData = portfolioData.map(function(item) { return item.value; });
+            
+            var dataMap = portfolioData.map(function(item) {
+                return {
+                    time: new Date(item.date).getTime(),
+                    value: item.value
+                };
+            });
+
+            var chartDiv = document.getElementById('asset-chart');
+
+            // --- 輔助函式 (ES5) ---
+            function formatCurrency(num) {
+                var sign = num >= 0 ? '+' : '−';
+                return sign + '$' + Math.abs(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+
+            function formatDate(dateString) {
+                return new Date(dateString).toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' });
+            }
+            
+            // --- Plotly 圖表設定 (ES5) ---
+            
+            var baseLayout = {
+                font: { family: 'Plus Jakarta Sans, Noto Sans TC, 微軟正黑體, sans-serif', color: '#3b3b3b' },
+                paper_bgcolor: 'transparent', plot_bgcolor: 'transparent', dragmode: 'select', 
+                selectdirection: 'h', 
+                xaxis: { type: 'date', title: '日期', gridcolor: '#eeeeee' },
+                yaxis: { title: '資產總值', tickprefix: '$', tickformat: '~s', gridcolor: '#eeeeee' },
+                hovermode: 'x unified',
+                margin: { l: 60, r: 30, t: 30, b: 50 },
+                newselection: { line: { color: 'rgba(0, 0, 0, 0)' } },
+                shapes: [],
+                annotations: [] 
+            };
+
+            var trace1 = {
+                x: xData,
+                y: yData,
+                type: 'scatter', 
+                mode: 'lines',
+                name: '資產總值',
+                line: { color: '#5c728a', width: 3 }, 
+                hoverinfo: 'x+y', 
+                hovertemplate: '%{x|%Y-%m-%d}<br><b>%{y:$,.2f}</b><extra></extra>'
+            };
+
+            var config = { responsive: true, displayModeBar: false, scrollZoom: false };
+
+            Plotly.newPlot(chartDiv, [trace1], baseLayout, config);
+
+            // --- V3 核心互動事件 (90 FPS) ---
+            var lastUpdateTime = 0;
+            var THROTTLE_DELAY = 11; 
+
+            chartDiv.on('plotly_selecting', function(eventData) {
+                
+                var now = Date.now();
+                if (now - lastUpdateTime < THROTTLE_DELAY) { return; }
+                lastUpdateTime = now; 
+                
+                if (!eventData || !eventData.range) { 
+                    Plotly.relayout(chartDiv, { shapes: [], annotations: [] }); // 清除
+                    return; 
+                }
+
+                var xRange = eventData.range.x;
+                var startTime = new Date(xRange[0]).getTime();
+                var endTime = new Date(xRange[1]).getTime();
+                
+                var selectedPoints = dataMap.filter(function(d) {
+                    return d.time >= startTime && d.time <= endTime;
+                });
+
+                if (selectedPoints.length < 2) {
+                    Plotly.relayout(chartDiv, { shapes: [], annotations: [] });
+                    return;
+                }
+
+                var startData = selectedPoints[0];
+                var endData = selectedPoints[selectedPoints.length - 1];
+                var valueChange = endData.value - startData.value;
+                var percentChange = (valueChange / startData.value) * 100;
+                var isProfit = valueChange >= 0;
+
+                var trendColor = isProfit ? '#4da46d' : '#7a4b29'; 
+                var trendFillColor = isProfit ? 'rgba(77, 164, 109, 0.1)' : 'rgba(122, 75, 41, 0.1)';
+                var sign = isProfit ? '+' : ''; 
+
+                var yMin = Math.min.apply(null, yData); 
+                var yMax = Math.max.apply(null, yData); 
+                var yAnnotationPos = yMax * 0.95; 
+
+                var startLine = { type: 'line', x0: xRange[0], x1: xRange[0], y0: yMin, y1: yMax, line: { color: '#5c728a', width: 1, dash: 'dot' } };
+                var endLine = { type: 'line', x0: xRange[1], x1: xRange[1], y0: yMin, y1: yMax, line: { color: '#5c728a', width: 1, dash: 'dot' } };
+                var fillRect = { type: 'rect', x0: xRange[0], x1: xRange[1], y0: yMin, y1: yMax, fillcolor: trendFillColor, line: { width: 0 } };
+                
+                var textLine1 = '<b><span style="color:' + trendColor + '; font-size: 1.1em;">' + formatCurrency(valueChange) + ' (' + sign + percentChange.toFixed(2) + '%)</span></b>';
+                var textLine2 = '<span style;="color:#5c728a; font-size: 0.9em;">' + formatDate(xRange[0]) + ' - ' + formatDate(xRange[1]) + '</span>'; 
+                
+                var newAnnotation = {
+                    x: (startTime + endTime) / 2, y: yAnnotationPos, text: textLine1 + '<br>' + textLine2, showarrow: false,
+                    bgcolor: 'rgba(255, 255, 255, 0.95)', bordercolor: 'rgba(92, 114, 138, 0.2)', borderwidth: 1, borderpad: 8,
+                    font: { family: 'Plus Jakarta Sans, Noto Sans TC, 微軟正黑體, sans-serif' }, align: 'center'
+                };
+
+                Plotly.relayout(chartDiv, {
+                    shapes: [startLine, endLine, fillRect],
+                    annotations: [newAnnotation]
+                });
+            });
+
+            chartDiv.on('plotly_deselect', function() {
+                Plotly.relayout(chartDiv, { shapes: [], annotations: [] });
+            });
+        });
+        
+        // 初始載入時顯示儀表板
+        document.addEventListener("DOMContentLoaded", function() {
+            showTab('dashboard');
+        });
+    </script>
+</body>
+</html>
