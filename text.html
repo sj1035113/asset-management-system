@@ -262,6 +262,8 @@
                         <p style="font-size: 0.9rem; color: #5c728a;">
                             上次更新：<span id="last-updated-time">—</span>
                             <button class="btn-update" id="update-prices-btn">手動更新報價</button>
+                            <button class="btn-update" id="backfill-snapshots-btn" style="background-color: #7a4b29; margin-left: 10px;">重建歷史快照 (API)</button>
+                            <span id="backfill-status" style="font-size: 0.8rem; color: #5c728a; margin-left: 10px;"></span>
                         </p>
                     </div>
 
@@ -518,6 +520,7 @@
                 var stored = localStorage.getItem(STORAGE_KEY);
                 if (!stored) {
                     AppData = deepClone(defaultDatabase);
+                    takeSnapshot();
                     saveData(AppData);
                     return AppData;
                 }
@@ -535,6 +538,7 @@
             } catch (error) {
                 console.error('讀取資料時發生錯誤，已回復預設資料。', error);
                 AppData = deepClone(defaultDatabase);
+                takeSnapshot();
                 saveData(AppData);
                 return AppData;
             }
@@ -572,13 +576,46 @@
             return date.toLocaleDateString('zh-TW');
         }
 
-        function calculateTotalValue() {
-            if (!Array.isArray(AppData.holdings)) { return 0; }
-            return AppData.holdings.reduce(function(total, holding) {
-                var qty = Number(holding.quantity) || 0;
-                var price = Number(holding.latestPrice) || 0;
-                return total + qty * price;
+        function calculateNetCash() {
+            if (!Array.isArray(AppData.cashFlow)) { return 0; }
+            return AppData.cashFlow.reduce(function(total, record) {
+                return total + (Number(record.amount) || 0);
             }, 0);
+        }
+
+        function calculateTotalValue() {
+            var holdingsValue = Array.isArray(AppData.holdings)
+                ? AppData.holdings.reduce(function(total, holding) {
+                    var qty = Number(holding.quantity) || 0;
+                    var price = Number(holding.latestPrice) || 0;
+                    return total + qty * price;
+                }, 0)
+                : 0;
+
+            var netCash = calculateNetCash();
+            return holdingsValue + netCash;
+        }
+
+        function takeSnapshot() {
+            if (!AppData) { return; }
+
+            var currentTotal = calculateTotalValue();
+            var todayDate = new Date().toISOString().slice(0, 10);
+
+            if (!AppData.snapshots || !Array.isArray(AppData.snapshots.history)) {
+                AppData.snapshots = { history: [] };
+            }
+
+            var history = AppData.snapshots.history;
+            var todaySnapshotIndex = history.findIndex(function(item) { return item.date === todayDate; });
+
+            if (todaySnapshotIndex > -1) {
+                history[todaySnapshotIndex].value = currentTotal;
+            } else {
+                history.push({ date: todayDate, value: currentTotal });
+            }
+
+            history.sort(function(a, b) { return new Date(a.date) - new Date(b.date); });
         }
 
         function getLastUpdatedTime() {
@@ -932,22 +969,29 @@
             var container = document.getElementById('distribution-chart');
             if (!container) { return; }
 
-            if (!Array.isArray(AppData.holdings) || AppData.holdings.length === 0) {
+            var grouped = {};
+            if (Array.isArray(AppData.holdings)) {
+                AppData.holdings.forEach(function(holding) {
+                    var key = translateHoldingType(holding.type);
+                    var qty = Number(holding.quantity) || 0;
+                    var price = Number(holding.latestPrice) || 0;
+                    var value = qty * price;
+                    if (!grouped[key]) { grouped[key] = 0; }
+                    grouped[key] += value;
+                });
+            }
+
+            var netCash = calculateNetCash();
+            if (netCash > 0) {
+                grouped['現金'] = (grouped['現金'] || 0) + netCash;
+            }
+
+            var labels = Object.keys(grouped).filter(function(label) { return grouped[label] > 0; });
+            if (labels.length === 0) {
                 container.textContent = '目前沒有足夠的持倉資料可用於繪圖。';
                 return;
             }
 
-            var grouped = {};
-            AppData.holdings.forEach(function(holding) {
-                var key = translateHoldingType(holding.type);
-                var qty = Number(holding.quantity) || 0;
-                var price = Number(holding.latestPrice) || 0;
-                var value = qty * price;
-                if (!grouped[key]) { grouped[key] = 0; }
-                grouped[key] += value;
-            });
-
-            var labels = Object.keys(grouped);
             var values = labels.map(function(label) { return grouped[label]; });
 
             Plotly.newPlot(container, [{
@@ -1030,17 +1074,23 @@
         function deleteHolding(id) {
             if (!id) { return; }
             AppData.holdings = AppData.holdings.filter(function(item) { return item.id !== id; });
+            takeSnapshot();
             saveData(AppData);
             renderHoldingsTable();
             updateDashboard();
             renderDistributionChart();
+            refreshAssetChart();
         }
 
         function deleteCashflow(id) {
             if (!id) { return; }
             AppData.cashFlow = AppData.cashFlow.filter(function(item) { return item.id !== id; });
+            takeSnapshot();
             saveData(AppData);
             renderCashFlowTable();
+            updateDashboard();
+            renderDistributionChart();
+            refreshAssetChart();
         }
 
         function setupHoldingsForm() {
@@ -1084,11 +1134,13 @@
                     });
                 }
 
+                takeSnapshot();
                 saveData(AppData);
                 closeModal('holdings-modal');
                 renderHoldingsTable();
                 updateDashboard();
                 renderDistributionChart();
+                refreshAssetChart();
             });
         }
 
@@ -1129,9 +1181,13 @@
                     });
                 }
 
+                takeSnapshot();
                 saveData(AppData);
                 closeModal('cashflow-modal');
                 renderCashFlowTable();
+                updateDashboard();
+                renderDistributionChart();
+                refreshAssetChart();
             });
         }
 
@@ -1160,7 +1216,7 @@
                 return;
             }
 
-            var apiKey = 'demo';
+            var apiKey = '3N4SN05MUX038BYA';
             var promises = AppData.holdings.map(function(holding) {
                 return fetchLatestPrice(holding.ticker, apiKey)
                     .then(function(price) {
@@ -1175,10 +1231,12 @@
             });
 
             Promise.all(promises).then(function() {
+                takeSnapshot();
                 saveData(AppData);
                 renderHoldingsTable();
                 updateDashboard();
                 renderDistributionChart();
+                refreshAssetChart();
             });
         }
 
@@ -1202,6 +1260,99 @@
                 .catch(function(error) {
                     console.warn('取得 ' + ticker + ' 報價失敗，請確認網路或 API 金鑰設定。', error);
                     return null;
+                });
+        }
+
+        function fetchHistoricalPrices(ticker, apiKey) {
+            if (!ticker || ticker === 'Account Total' || ticker === 'Cash & Cash Investments') {
+                return Promise.resolve({});
+            }
+            var url = 'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=' + encodeURIComponent(ticker) + '&outputsize=compact&apikey=' + apiKey;
+            return fetch(url)
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (!data || !data['Time Series (Daily)']) {
+                        console.warn('無法獲取 ' + ticker + ' 的歷史數據。', data);
+                        return {};
+                    }
+                    var priceHistory = {};
+                    for (var date in data['Time Series (Daily)']) {
+                        if (Object.prototype.hasOwnProperty.call(data['Time Series (Daily)'], date)) {
+                            priceHistory[date] = parseFloat(data['Time Series (Daily)'][date]['5. adjusted close']);
+                        }
+                    }
+                    return priceHistory;
+                })
+                .catch(function(error) {
+                    console.warn('取得 ' + ticker + ' 歷史數據時發生錯誤：', error);
+                    return {};
+                });
+        }
+
+        function calculateCumulativeCashFlow(targetDate, allCashFlows) {
+            var targetTime = new Date(targetDate).getTime();
+            return allCashFlows.reduce(function(total, record) {
+                var recordTime = new Date(record.date).getTime();
+                if (!isNaN(recordTime) && recordTime <= targetTime) {
+                    return total + (Number(record.amount) || 0);
+                }
+                return total;
+            }, 0);
+        }
+
+        function runHistoricalBackfill() {
+            var statusEl = document.getElementById('backfill-status');
+            var btn = document.getElementById('backfill-snapshots-btn');
+            if (!statusEl || !btn) { return; }
+
+            var apiKey = '3N4SN05MUX038BYA';
+            statusEl.textContent = '正在重建中，請稍候... (可能需時 1-2 分鐘)';
+            btn.disabled = true;
+
+            var holdings = Array.isArray(AppData.holdings) ? AppData.holdings : [];
+            var allCashFlows = Array.isArray(AppData.cashFlow) ? AppData.cashFlow : [];
+            var pricePromises = holdings.map(function(h) { return fetchHistoricalPrices(h.ticker, apiKey); });
+
+            Promise.all(pricePromises)
+                .then(function(results) {
+                    var newSnapshotHistory = [];
+                    var today = new Date();
+                    var startDate = new Date();
+                    startDate.setDate(today.getDate() - 100);
+
+                    for (var d = new Date(startDate.getTime()); d <= today; d.setDate(d.getDate() + 1)) {
+                        var currentDateStr = d.toISOString().slice(0, 10);
+                        var totalHoldingsValue = 0;
+
+                        holdings.forEach(function(holding, index) {
+                            var priceHistory = results[index] || {};
+                            var price = priceHistory[currentDateStr];
+                            if (typeof price === 'undefined') {
+                                price = Number(holding.latestPrice) || 0;
+                            }
+                            totalHoldingsValue += (Number(holding.quantity) || 0) * (Number(price) || 0);
+                        });
+
+                        var cumulativeCash = calculateCumulativeCashFlow(currentDateStr, allCashFlows);
+                        newSnapshotHistory.push({ date: currentDateStr, value: totalHoldingsValue + cumulativeCash });
+                    }
+
+                    if (!AppData.snapshots || !Array.isArray(AppData.snapshots.history)) {
+                        AppData.snapshots = { history: [] };
+                    }
+                    AppData.snapshots.history = newSnapshotHistory;
+                    takeSnapshot();
+                    saveData(AppData);
+                    statusEl.textContent = '歷史快照重建完成！';
+                    btn.disabled = false;
+                    refreshAssetChart();
+                    updateDashboard();
+                    renderDistributionChart();
+                })
+                .catch(function(err) {
+                    console.error('重建歷史快照失敗:', err);
+                    statusEl.textContent = '重建失敗，請檢查 F12 控制台或 API 金鑰限制。';
+                    btn.disabled = false;
                 });
         }
 
@@ -1233,6 +1384,7 @@
                         cashFlow: Array.isArray(result.cashFlow) ? result.cashFlow : [],
                         snapshots: result.snapshots && typeof result.snapshots === 'object' ? result.snapshots : { history: [] }
                     };
+                    takeSnapshot();
                     saveData(AppData);
                     renderAll();
                     alert('匯入完成！');
@@ -1295,6 +1447,12 @@
 
             document.getElementById('update-prices-btn').addEventListener('click', function() {
                 updateHoldingsPrices();
+            });
+
+            document.getElementById('backfill-snapshots-btn').addEventListener('click', function() {
+                if (confirm('這將消耗您的 API 額度並覆蓋歷史圖表，確定要重建嗎？')) {
+                    runHistoricalBackfill();
+                }
             });
 
             document.getElementById('export-json-btn').addEventListener('click', function() {
